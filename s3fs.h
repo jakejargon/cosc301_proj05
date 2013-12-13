@@ -27,7 +27,16 @@ typedef struct {
  * type) should go here.
  */
 
-
+typedef struct {
+	char type;
+	char name[256];       
+    mode_t    st_mode;    /* protection */
+    nlink_t   st_nlink;   /* number of hard links */
+    off_t     st_size;    /* total size, in bytes */
+    blksize_t st_blksize; /* blocksize for file system I/O */
+    time_t    st_atime;   /* time of last access */
+    time_t    st_mtime;   /* time of last modification */
+} s3dirent_t;
 
 
 #endif // __USERSPACEFS_H__

@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
+#include <time.h>
 
 #define GET_PRIVATE_DATA ((s3context_t *) fuse_get_context()->private_data)
 
@@ -43,6 +44,57 @@ void *fs_init(struct fuse_conn_info *conn)
     fprintf(stderr, "fs_init --- initializing file system.\n");
     s3context_t *ctx = GET_PRIVATE_DATA;
     return ctx;
+    
+    //additions vv
+    char *s3key = getenv(S3ACCESSKEY);
+    if (!s3key) {
+        fprintf(stderr, "%s environment variable must be defined\n", S3ACCESSKEY);
+    }
+    char *s3secret = getenv(S3SECRETKEY);
+    if (!s3secret) {
+        fprintf(stderr, "%s environment variable must be defined\n", S3SECRETKEY);
+    }
+    char *s3bucket = getenv(S3BUCKET);
+    if (!s3bucket) {
+        fprintf(stderr, "%s environment variable must be defined\n", S3BUCKET);
+    }
+
+    printf("Using bucket: %s\n", s3bucket);
+    
+    if (s3fs_init_credentials() < 0) {
+        printf("Failed to initialize S3 credentials.\n");
+        return -1;
+    }
+ 
+    if (s3fs_test_bucket(s3bucket) < 0) {
+        printf("Failed to connect to bucket (s3fs_test_bucket)\n");
+    } else {
+        printf("Successfully connected to bucket (s3fs_test_bucket)\n");
+    }
+    
+    s3dirent_t root[1];
+    root[0].name = "/";
+    root[0].type = 'd';       
+    //mode_t    st_mode;    /* protection */
+    root[0].st_nlink = 1;
+    root[0].st_size = sizeof(root);    /* total size, in bytes */
+    time_t result = time(NULL);
+    root[0].st_atime = result;   /* time of last access */
+    root[0].st_mtime = result;   /* time of last modification */
+    }
+    
+    const char *slashkey = "/"
+    const s3dirent_t *root_object = root;
+    ssize_t object_length = sizeof(root_object);
+
+    ssize_t rv = s3fs_put_object(s3bucket, "/", (uint8_t*)root_object, object_length);
+    if (rv < 0) {
+        printf("Failure in s3fs_put_object\n");
+    } else if (rv < object_length) {
+        printf("Failed to upload full test object (s3fs_put_object %d)\n", rv);
+    } else {
+        printf("Successfully put test object in s3 (s3fs_put_object)\n");
+    }
 }
 
 /*
@@ -79,6 +131,34 @@ int fs_opendir(const char *path, struct fuse_file_info *fi) {
     fprintf(stderr, "fs_opendir(path=\"%s\")\n", path);
     s3context_t *ctx = GET_PRIVATE_DATA;
     return -EIO;
+    
+    //my additions vv   
+    
+    uint8_t *retrieved_object = NULL;
+    // zeroes as last two args means that we want to retrieve entire object
+    rv = s3fs_get_object(s3bucket, *path, &retrieved_object, 0, 0);
+    if (rv < 0) {
+        printf("Failure in s3fs_get_object\n");
+    } else if (rv < object_length) {
+        printf("Failed to retrieve entire object (s3fs_get_object %d)\n", rv);
+    } else {
+        printf("Successfully retrieved test object from s3 (s3fs_get_object)\n");
+        if (strcmp((const char *)retrieved_object, test_object) == 0) {
+            printf("Retrieved object looks right.\n");
+        } else {
+            printf("Retrieved object doesn't match what we sent?!\n");
+        }
+    }
+
+    // memory.  no leakage!
+    if (retrieved_object) {
+        free (retrieved_object);
+        return 1;
+    }
+    else {
+    	return 0;
+    }    
+        	
 }
 
 
